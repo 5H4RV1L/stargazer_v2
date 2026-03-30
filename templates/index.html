@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stargazer AI — Exoplanet Classifier</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <div class="shooting-stars"></div>
+    <div class="title_card">
+        <div class="title_brand">
+            <div class="title_icon">🔭</div>
+            <div>
+                <h1>STARGAZER AI</h1>
+                <p class="subtitle">Exoplanet Disposition Classifier · XGBoost ML Pipeline</p>
+            </div>
+        </div>
+        <div class="title_actions">
+            <div class="model-badge not-ready" id="modelBadge">
+                <span class="dot"></span>
+                <span id="modelBadgeText">checking model…</span>
+            </div>
+            <a class="file-label" href="/guide" style="font-size:12px; padding:8px 14px;">Guide ↗</a>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Workflow Steps -->
+        <div class="workflow-steps">
+            <div class="step" id="step1">
+                <div class="step-number">1</div>
+                <span>Upload Training Data</span>
+            </div>
+            <span class="step-arrow">→</span>
+            <div class="step" id="step2">
+                <div class="step-number">2</div>
+                <span>Train Model</span>
+            </div>
+            <span class="step-arrow">→</span>
+            <div class="step" id="step3">
+                <div class="step-number">3</div>
+                <span>Upload Test Data</span>
+            </div>
+            <span class="step-arrow">→</span>
+            <div class="step" id="step4">
+                <div class="step-number">4</div>
+                <span>Make Predictions</span>
+            </div>
+        </div>
+
+        <!-- Training + Prediction side by side -->
+        <div class="bigbox">
+            <!-- Training Pipeline -->
+            <div class="box">
+                <h2><span class="icon">📊</span> Training Pipeline</h2>
+
+                <div class="upload-area" id="labelledUploadArea">
+                    <span class="upload-icon">📁</span>
+                    <p>Drop a labelled CSV here or choose a file</p>
+                    <label for="labelledFile" class="file-label">Choose File</label>
+                    <input type="file" id="labelledFile" accept=".csv">
+                    <p class="file-name-display" id="labelledFileName"></p>
+                </div>
+
+                <div class="btn-row">
+                    <button class="primary" id="trainBtn" disabled>🚀 Train Model</button>
+                    <button class="ghost" id="demoTrainBtn">Use Demo Data</button>
+                </div>
+
+                <div class="output-section" id="trainingOutput"></div>
+            </div>
+
+            <!-- Prediction Pipeline -->
+            <div class="box">
+                <h2><span class="icon">🔮</span> Prediction Pipeline</h2>
+
+                <div class="upload-area" id="unlabelledUploadArea">
+                    <span class="upload-icon">📁</span>
+                    <p>Drop an unlabelled CSV here or choose a file</p>
+                    <label for="unlabelledFile" class="file-label">Choose File</label>
+                    <input type="file" id="unlabelledFile" accept=".csv">
+                    <p class="file-name-display" id="unlabelledFileName"></p>
+                </div>
+
+                <div class="btn-row">
+                    <button class="primary" id="predictBtn" disabled>🎯 Run Predictions</button>
+                    <button class="ghost" id="demoTestBtn">Use Demo Data</button>
+                </div>
+
+                <div class="output-section" id="predictionOutput"></div>
+            </div>
+        </div>
+
+        <!-- Individual Row Viewer -->
+        <div class="box" style="margin-bottom: 32px;">
+            <h2><span class="icon">🔍</span> Individual Row Viewer</h2>
+
+            <div class="row-input-section">
+                <input type="number" id="rowNumber" placeholder="Enter row number (e.g. 1)" min="1">
+                <button class="primary" id="viewPredictionBtn" disabled>View Prediction</button>
+            </div>
+
+            <div class="output-section" id="rowPredictionOutput"></div>
+        </div>
+    </div>
+
+    <script>
+        let totalRows = 0;
+
+        /* ── Model Status Check ── */
+        async function checkModelStatus() {
+            try {
+                const res = await fetch('/model_status');
+                const data = await res.json();
+                const badge = document.getElementById('modelBadge');
+                const badgeText = document.getElementById('modelBadgeText');
+
+                if (data.loaded) {
+                    badge.className = 'model-badge ready';
+                    badgeText.textContent = 'Model ready';
+
+                    // Model is loaded — mark steps 1 & 2 done and enable predict
+                    document.getElementById('step1').classList.add('completed');
+                    document.getElementById('step2').classList.add('completed');
+                    document.getElementById('predictBtn').disabled = false;
+
+                    // Show a notice in training output
+                    const tOut = document.getElementById('trainingOutput');
+                    if (!tOut.innerHTML.trim()) {
+                        tOut.innerHTML = `<div class="status-message success">✅ Trained model loaded from cache — no retraining needed.<br>
+                            <span style="font-size:12px;opacity:0.8;">Upload training data and retrain only if you want a fresh model.</span></div>`;
+                    }
+                } else {
+                    badge.className = 'model-badge not-ready';
+                    badgeText.textContent = 'No model loaded';
+                }
+            } catch (e) {
+                document.getElementById('modelBadgeText').textContent = 'Status unknown';
+            }
+        }
+
+        checkModelStatus();
+
+        /* ── File input handlers ── */
+        document.getElementById('labelledFile').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            document.getElementById('trainingOutput').innerHTML = '';
+            document.getElementById('trainBtn').disabled = true;
+            document.getElementById('step1').classList.remove('completed');
+            document.getElementById('step2').classList.remove('completed');
+            document.getElementById('labelledFileName').textContent = file.name;
+            uploadLabelledDataset(file);
+        });
+
+        document.getElementById('unlabelledFile').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            document.getElementById('predictionOutput').innerHTML = '';
+            document.getElementById('rowPredictionOutput').innerHTML = '';
+            document.getElementById('step3').classList.remove('completed');
+            document.getElementById('step4').classList.remove('completed');
+            document.getElementById('viewPredictionBtn').disabled = true;
+            totalRows = 0;
+            document.getElementById('unlabelledFileName').textContent = file.name;
+        });
+
+        /* ── Drag & Drop ── */
+        ['labelledUploadArea', 'unlabelledUploadArea'].forEach(id => {
+            const area = document.getElementById(id);
+            area.addEventListener('dragover', e => { e.preventDefault(); area.classList.add('dragover'); });
+            area.addEventListener('dragleave', () => area.classList.remove('dragover'));
+            area.addEventListener('drop', e => {
+                e.preventDefault();
+                area.classList.remove('dragover');
+                const file = e.dataTransfer.files[0];
+                if (!file || !file.name.endsWith('.csv')) return;
+                if (id === 'labelledUploadArea') {
+                    document.getElementById('labelledFileName').textContent = file.name;
+                    uploadLabelledDataset(file);
+                } else {
+                    document.getElementById('unlabelledFileName').textContent = file.name;
+                }
+            });
+        });
+
+        /* ── Upload labelled dataset ── */
+        async function uploadLabelledDataset(file) {
+            const output = document.getElementById('trainingOutput');
+            output.innerHTML = `<div class="loader"></div><p class="loading-text">Analysing dataset…</p>`;
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const res = await fetch('/upload_labelled', { method: 'POST', body: formData });
+                const data = await res.json();
+
+                if (data.success) {
+                    document.getElementById('step1').classList.add('completed');
+                    document.getElementById('trainBtn').disabled = false;
+
+                    let html = `<div class="status-message success">${data.message}</div>`;
+                    html += `<div class="prediction-card">`;
+                    html += `<h3>Dataset Overview</h3>`;
+                    html += `<p><strong>${data.info.shape[0].toLocaleString()}</strong> rows &nbsp;·&nbsp; <strong>${data.info.shape[1]}</strong> columns</p>`;
+                    html += `<p style="margin-top:12px;font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;font-family:'JetBrains Mono',monospace;">Class Distribution</p>`;
+                    for (const [key, value] of Object.entries(data.info.class_distribution)) {
+                        const pct = data.info.class_percentage[key].toFixed(1);
+                        html += `<div class="prob-label-row"><span>${key}</span><span>${value.toLocaleString()} (${pct}%)</span></div>`;
+                        html += `<div class="probability-bar"><div class="probability-fill" style="width:${pct}%">${pct}%</div></div>`;
+                    }
+                    html += `</div>`;
+                    output.innerHTML = html;
+                } else {
+                    output.innerHTML = `<div class="status-message error">${data.error}</div>`;
+                }
+            } catch (err) {
+                output.innerHTML = `<div class="status-message error">Upload failed: ${err.message}</div>`;
+            }
+        }
+
+        /* ── Train model ── */
+        document.getElementById('trainBtn').addEventListener('click', async function() {
+            const output = document.getElementById('trainingOutput');
+            output.innerHTML = `<div class="loader"></div><p class="loading-text">Training XGBoost · 5-fold CV · SMOTE…</p>`;
+            this.disabled = true;
+
+            try {
+                const res = await fetch('/train_model', { method: 'POST' });
+                const data = await res.json();
+
+                if (data.success) {
+                    document.getElementById('step2').classList.add('completed');
+                    document.getElementById('predictBtn').disabled = false;
+                    checkModelStatus();
+
+                    const m = data.results[data.best_model];
+                    let html = `<div class="status-message success">✅ ${data.message} — saved to disk.</div>`;
+                    html += `<div class="prediction-card">`;
+                    html += `<h3>Best Model: ${data.best_model}</h3>`;
+                    html += `<div class="model-results">`;
+                    html += metricCard((m.cv_accuracy*100).toFixed(2)+'%', 'Accuracy');
+                    html += metricCard((m.cv_precision*100).toFixed(2)+'%', 'Precision');
+                    html += metricCard((m.cv_recall*100).toFixed(2)+'%', 'Recall');
+                    html += metricCard((m.cv_f1*100).toFixed(2)+'%', 'F1 Score');
+                    html += `</div>`;
+
+                    const cm = m.confusion_matrix;
+                    const classes = data.class_names || [];
+                    if (cm && Array.isArray(cm)) {
+                        html += `<p style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;font-family:'JetBrains Mono',monospace;margin-top:16px;margin-bottom:8px;">Confusion Matrix</p>`;
+                        html += `<div class="confusion-wrap"><table class="confusion-table" aria-label="Confusion matrix">`;
+                        html += `<thead><tr><th></th>`;
+                        classes.forEach(c => html += `<th>${c}</th>`);
+                        html += `</tr></thead><tbody>`;
+                        cm.forEach((row, i) => {
+                            html += `<tr><th style="text-align:left;font-size:11px;">${classes[i]||'Class '+i}</th>`;
+                            row.forEach(v => html += `<td>${v.toLocaleString()}</td>`);
+                            html += `</tr>`;
+                        });
+                        html += `</tbody></table></div>`;
+                    }
+                    html += `</div>`;
+                    output.innerHTML = html;
+                } else {
+                    output.innerHTML = `<div class="status-message error">${data.error}</div>`;
+                    this.disabled = false;
+                }
+            } catch (err) {
+                output.innerHTML = `<div class="status-message error">Training error: ${err.message}</div>`;
+                this.disabled = false;
+            }
+        });
+
+        /* ── Demo train ── */
+        document.getElementById('demoTrainBtn').addEventListener('click', async function() {
+            const output = document.getElementById('trainingOutput');
+            output.innerHTML = `<div class="loader"></div><p class="loading-text">Loading demo training data…</p>`;
+            try {
+                const res = await fetch('/load_demo_train', { method: 'POST' });
+                const data = await res.json();
+                if (data.success) {
+                    document.getElementById('step1').classList.add('completed');
+                    document.getElementById('trainBtn').disabled = false;
+                    output.innerHTML = `<div class="status-message success">${data.message}</div>
+                        <div class="prediction-card"><h3>Demo Dataset</h3>
+                        <p><strong>${data.info.shape[0].toLocaleString()}</strong> rows · <strong>${data.info.shape[1]}</strong> columns</p></div>`;
+                } else {
+                    output.innerHTML = `<div class="status-message error">${data.error}</div>`;
+                }
+            } catch (err) {
+                output.innerHTML = `<div class="status-message error">Error: ${err.message}</div>`;
+            }
+        });
+
+        /* ── Predict ── */
+        document.getElementById('predictBtn').addEventListener('click', async function() {
+            const file = document.getElementById('unlabelledFile').files[0];
+            if (!file) { showPredictionError('Please select a test CSV file first.'); return; }
+
+            const output = document.getElementById('predictionOutput');
+            output.innerHTML = `<div class="loader"></div><p class="loading-text">Running predictions…</p>`;
+            this.disabled = true;
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const res = await fetch('/upload_unlabelled', { method: 'POST', body: formData });
+                const data = await res.json();
+                if (data.success) {
+                    finishPredictions(data, output);
+                } else {
+                    output.innerHTML = `<div class="status-message error">${data.error}</div>`;
+                    this.disabled = false;
+                }
+            } catch (err) {
+                output.innerHTML = `<div class="status-message error">Error: ${err.message}</div>`;
+                this.disabled = false;
+            }
+        });
+
+        /* ── Demo test ── */
+        document.getElementById('demoTestBtn').addEventListener('click', async function() {
+            const output = document.getElementById('predictionOutput');
+            output.innerHTML = `<div class="loader"></div><p class="loading-text">Running demo predictions…</p>`;
+            try {
+                const res = await fetch('/load_demo_test', { method: 'POST' });
+                const data = await res.json();
+                if (data.success) {
+                    finishPredictions(data, output);
+                } else {
+                    output.innerHTML = `<div class="status-message error">${data.error}</div>`;
+                }
+            } catch (err) {
+                output.innerHTML = `<div class="status-message error">Error: ${err.message}</div>`;
+            }
+        });
+
+        function finishPredictions(data, output) {
+            document.getElementById('step3').classList.add('completed');
+            document.getElementById('step4').classList.add('completed');
+            document.getElementById('viewPredictionBtn').disabled = false;
+            document.getElementById('predictBtn').disabled = false;
+            totalRows = data.total_rows;
+            document.getElementById('rowNumber').max = totalRows;
+
+            let html = `<div class="status-message success">${data.message}</div>`;
+            html += `<div class="prediction-card"><h3>Prediction Summary</h3>`;
+            html += `<p><strong>${data.total_rows.toLocaleString()}</strong> rows classified</p>`;
+            html += `<p style="margin-top:12px;font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;font-family:'JetBrains Mono',monospace;">Distribution</p>`;
+            for (const [key, value] of Object.entries(data.prediction_summary)) {
+                const pct = ((value / data.total_rows) * 100).toFixed(1);
+                html += `<div class="prob-label-row"><span>${key}</span><span>${value.toLocaleString()} (${pct}%)</span></div>`;
+                html += `<div class="probability-bar"><div class="probability-fill" style="width:${pct}%">${pct}%</div></div>`;
+            }
+            html += `</div>`;
+            output.innerHTML = html;
+        }
+
+        /* ── Individual Row Viewer ── */
+        document.getElementById('viewPredictionBtn').addEventListener('click', viewRow);
+        document.getElementById('rowNumber').addEventListener('keypress', e => {
+            if (e.key === 'Enter' && !document.getElementById('viewPredictionBtn').disabled) viewRow();
+        });
+
+        async function viewRow() {
+            const rowNum = document.getElementById('rowNumber').value;
+            if (!rowNum || rowNum < 1 || (totalRows && rowNum > totalRows)) {
+                alert(`Please enter a valid row number between 1 and ${totalRows || 'N'}`);
+                return;
+            }
+            const output = document.getElementById('rowPredictionOutput');
+            output.innerHTML = `<div class="loader"></div>`;
+            try {
+                const res = await fetch(`/predict_row/${rowNum}`);
+                const data = await res.json();
+                if (data.success) {
+                    let html = `<div class="prediction-card">`;
+                    html += `<h3>Row ${data.row_number} — Classification Result</h3>`;
+                    html += `<div class="predicted-badge">
+                        <div class="label-title">Predicted Disposition</div>
+                        <div class="label-value">${data.predicted_label}</div>
+                    </div>`;
+
+                    html += `<p style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;font-family:'JetBrains Mono',monospace;margin:14px 0 8px;">Class Probabilities</p>`;
+                    for (const [cls, prob] of Object.entries(data.probabilities)) {
+                        const pct = (prob * 100).toFixed(2);
+                        html += `<div class="prob-label-row"><span>${cls}</span><span>${pct}%</span></div>`;
+                        html += `<div class="probability-bar"><div class="probability-fill" style="width:${pct}%"></div></div>`;
+                    }
+
+                    html += `<p style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;font-family:'JetBrains Mono',monospace;margin:14px 0 8px;">Key Features</p>`;
+                    html += `<div class="feature-grid">`;
+                    let count = 0;
+                    for (const [key, value] of Object.entries(data.features)) {
+                        if (count >= 6) break;
+                        html += `<div class="feature-item">
+                            <div class="feature-label">${key}</div>
+                            <div class="feature-value">${typeof value === 'number' ? value.toFixed(4) : value}</div>
+                        </div>`;
+                        count++;
+                    }
+                    html += `</div></div>`;
+                    output.innerHTML = html;
+                } else {
+                    output.innerHTML = `<div class="status-message error">${data.error}</div>`;
+                }
+            } catch (err) {
+                output.innerHTML = `<div class="status-message error">Error: ${err.message}</div>`;
+            }
+        }
+
+        function metricCard(value, label) {
+            return `<div class="metric-card"><div class="metric-label">${label}</div><div class="metric-value">${value}</div></div>`;
+        }
+
+        function showPredictionError(msg) {
+            document.getElementById('predictionOutput').innerHTML = `<div class="status-message error">${msg}</div>`;
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guide — Stargazer AI</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <style>
+        .guide-wrap {
+            max-width: 860px;
+            margin: 32px auto;
+            padding: 0 24px 48px;
+        }
+
+        .back-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+            color: var(--text-muted);
+            text-decoration: none;
+            margin-bottom: 28px;
+            transition: color 0.2s ease;
+        }
+        .back-btn:hover { color: var(--cyan); }
+
+        .guide-header {
+            margin-bottom: 36px;
+        }
+        .guide-header h2 {
+            font-family: 'Orbitron', monospace;
+            font-size: 22px;
+            font-weight: 900;
+            letter-spacing: 0.08em;
+            color: var(--star-white);
+            margin-bottom: 8px;
+        }
+        .guide-header p {
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+
+        .guide-section {
+            background: var(--space-card);
+            border: 1px solid var(--space-border);
+            border-radius: var(--radius);
+            padding: 28px;
+            backdrop-filter: blur(20px);
+            margin-bottom: 20px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .guide-section::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--space-border-hover), transparent);
+        }
+
+        .guide-section h3 {
+            font-family: 'Orbitron', monospace;
+            font-size: 12px;
+            letter-spacing: 0.12em;
+            color: var(--cyan);
+            text-transform: uppercase;
+            margin-bottom: 16px;
+        }
+
+        .guide-section ol, .guide-section ul {
+            padding-left: 20px;
+        }
+
+        .guide-section li {
+            color: var(--text-primary);
+            font-size: 14px;
+            line-height: 1.8;
+            margin-bottom: 4px;
+        }
+
+        .guide-section p {
+            color: var(--text-muted);
+            font-size: 14px;
+            line-height: 1.7;
+            margin-bottom: 10px;
+        }
+
+        code {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            background: rgba(56,189,248,0.1);
+            border: 1px solid rgba(56,189,248,0.15);
+            color: var(--teal);
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+
+        .feature-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .feature-chip {
+            background: rgba(56,189,248,0.05);
+            border: 1px solid rgba(56,189,248,0.12);
+            border-radius: 6px;
+            padding: 6px 12px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .feature-chip.target {
+            border-color: rgba(52,211,153,0.3);
+            background: rgba(52,211,153,0.05);
+            color: var(--success);
+        }
+
+        pre.example {
+            background: rgba(6,9,17,0.8);
+            border: 1px solid var(--space-border);
+            border-radius: var(--radius-sm);
+            padding: 16px;
+            overflow-x: auto;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            color: #7dd3fc;
+            line-height: 1.6;
+            margin-top: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="title_card">
+        <div class="title_brand">
+            <div class="title_icon">🔭</div>
+            <div>
+                <h1>STARGAZER AI</h1>
+                <p class="subtitle">Dataset & Training Guide</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="guide-wrap">
+            <a class="back-btn" href="/">← Back to Pipeline</a>
+
+            <div class="guide-header">
+                <h2>ML PIPELINE GUIDE</h2>
+                <p>Reference for preparing data, formatting CSVs, and training the classifier</p>
+            </div>
+
+            <div class="guide-section">
+                <h3>Pipeline Overview</h3>
+                <ol>
+                    <li>Upload a labelled CSV containing the target column and feature columns.</li>
+                    <li>Preprocessing: handle missing values, encode categoricals, scale numeric features.</li>
+                    <li>Feature engineering: derive ratio, log, and compound features that help the model.</li>
+                    <li>Apply SMOTE to balance class distribution, then run 5-fold stratified cross-validation.</li>
+                    <li>Train XGBoost, evaluate metrics and confusion matrix, save model to disk.</li>
+                    <li>Upload unlabelled test data — the same preprocessing pipeline runs automatically.</li>
+                </ol>
+            </div>
+
+            <div class="guide-section">
+                <h3>Required & Recommended Features</h3>
+                <p>The pipeline is designed around KOI (Kepler Object of Interest) naming conventions. Rename your columns if they differ.</p>
+                <div class="feature-list">
+                    <div class="feature-chip target">koi_disposition ← target</div>
+                    <div class="feature-chip">koi_period</div>
+                    <div class="feature-chip">koi_time0bk</div>
+                    <div class="feature-chip">koi_impact</div>
+                    <div class="feature-chip">koi_duration</div>
+                    <div class="feature-chip">koi_depth</div>
+                    <div class="feature-chip">koi_ror</div>
+                    <div class="feature-chip">koi_srho</div>
+                    <div class="feature-chip">koi_prad</div>
+                    <div class="feature-chip">koi_sma</div>
+                    <div class="feature-chip">koi_incl</div>
+                    <div class="feature-chip">koi_num_transits</div>
+                    <div class="feature-chip">koi_steff</div>
+                    <div class="feature-chip">koi_slogg</div>
+                    <div class="feature-chip">koi_smet</div>
+                    <div class="feature-chip">koi_srad</div>
+                    <div class="feature-chip">koi_smass</div>
+                    <div class="feature-chip">koi_kepmag</div>
+                    <div class="feature-chip">koi_gmag / rmag / imag</div>
+                    <div class="feature-chip">koi_jmag / hmag / kmag</div>
+                </div>
+            </div>
+
+            <div class="guide-section">
+                <h3>Column Renaming Example</h3>
+                <p>If your CSV uses different column names, rename them before uploading:</p>
+                <pre class="example">import pandas as pd
+
+df = pd.read_csv('my_data.csv')
+
+rename_map = {
+    'period':   'koi_period',
+    'depth':    'koi_depth',
+    'duration': 'koi_duration',
+    'prad':     'koi_prad',
+}
+df.rename(columns=rename_map, inplace=True)
+df.to_csv('my_data_renamed.csv', index=False)</pre>
+            </div>
+
+            <div class="guide-section">
+                <h3>Preprocessing Checklist</h3>
+                <ul>
+                    <li>Remove duplicate rows and obviously corrupt records.</li>
+                    <li>Ensure <code>koi_disposition</code> exists with consistent labels (e.g. CONFIRMED, CANDIDATE, FALSE POSITIVE).</li>
+                    <li>Numeric columns: missing values → median imputation; outliers → IQR clipping (3×).</li>
+                    <li>Categorical columns: missing values → mode or <code>'UNKNOWN'</code>; encode with LabelEncoder.</li>
+                    <li>Scale numeric features with StandardScaler before model training.</li>
+                    <li>Derived features used by the app: <code>planets_to_star_radius_ratio</code>, <code>log_period</code>, <code>depth_to_duration</code>.</li>
+                </ul>
+            </div>
+
+            <div class="guide-section">
+                <h3>Training Tips</h3>
+                <ul>
+                    <li>Use stratified folds to preserve class distribution across splits.</li>
+                    <li>Monitor accuracy, macro precision, recall, and F1 together — accuracy alone can be misleading with imbalanced classes.</li>
+                    <li>SMOTE is applied before cross-validation — watch for overfitting if your dataset is small.</li>
+                    <li>For XGBoost tuning: start with <code>n_estimators=200</code>, <code>max_depth=6–10</code>, <code>learning_rate=0.05–0.1</code>.</li>
+                    <li>After training the model is persisted to disk and automatically reloaded on the next server restart — no need to retrain unless your data changes.</li>
+                </ul>
+            </div>
+
+            <div class="guide-section">
+                <h3>CSV Formatting</h3>
+                <ul>
+                    <li>Comma-separated, UTF-8 encoded, with a header row.</li>
+                    <li>Use empty cells (not strings like <code>NaN</code> or <code>null</code>) for missing values.</li>
+                    <li>Include <code>koi_disposition</code> for labelled uploads; omit or leave blank for test uploads.</li>
+                    <li>Maximum file size: 16 MB.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
